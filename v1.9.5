@@ -1,0 +1,1021 @@
+// ==UserScript==
+// @name         _PartyGuest
+// @version      1.9.5
+// @description  A tool for downloading images and videos from Coomer or Kemono
+// @author       normal person
+// @match        *://coomer.st/*
+// @match        *://kemono.cr/*
+// @grant        GM_download
+// @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
+// @connect      *
+// ==/UserScript==
+
+
+
+GM_addStyle(`
+:root{--beige:#E3DCCB;--black:#1A1A1A;--desk:#7D7D7D;--light:#D8D8D8;--rain-red:#FF3B30;--rain-orange:#FF9500;--rain-yellow:#FFCC00;--rain-green:#34C759;--rain-blue:#007AFF;--rain-yellow:#FFCC00;--rain-indigo:#5856D6}
+button{transition:transform .15s cubic-bezier(.2,.8,.4,1),filter .15s}
+button:hover{transform:translateY(-2px);filter:brightness(1.1)}
+button:active{transform:translateY(0)}
+.hud-row{display:flex;gap:8px}
+.hud-row>button{flex:1 1 0}
+.full{width:100%}
+.post__files{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;justify-items:left;}
+.post__thumbnail img{width:100%;height:auto;border-radius:8px;border:2px solid var(--rain-orange);box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform .2s,box-shadow .2s;cursor:pointer;}
+.post__thumbnail img:hover{transform:scale(1.08);box-shadow:0 4px 15px rgba(0,0,0,.35);}
+.post__nav-links{position:sticky;top:5px;z-index:100;background:var(--beige);padding:4px 8px;border-radius:8px;border:2px solid #7D7D7D;margin:5px auto;width:98%;}
+.post__body>.ad-container,[class*="bottomRight--"],[class*="slideAnimation--"]{display:none!important;}
+.ad-container-slider{background:transparent!important}
+#partyHUD{position:fixed;bottom:16px;right:16px;z-index:9999;background:rgba(227,220,203,.85);color:var(--black);padding:14px 16px;border-radius:10px;border:2px solid #7D7D7D;font:14px/1.35 "Inter",sans-serif;display:flex;flex-direction:column;gap:10px;min-width:300px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+#partyHUD label{display:flex;align-items:center;gap:6px}
+#partyHUD input[type="text"]{width:100%;background:#F5F1E8;color:var(--black);border:1px solid #A8A8A8;border-radius:6px;padding:6px 8px}
+#partyHUD button{font-size:18px;text-shadow:0 3px 0 rgba(0,0,0,.15);padding:12px;font-weight:700;color:#fff;border:none;border-radius:8px;cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
+#dlBtn{background:var(--rain-blue)}
+#scrapeBtn{background:var(--rain-yellow)}
+#filterBtn{background:var(--rain-green)}
+#btnMedia{background:var(--rain-orange)!important}
+#dlBtn.stop{background:var(--rain-red)}
+#progressHUD{position:fixed;z-index:9999;background:rgba(227,220,203,.85);color:var(--black);padding:12px 16px;border-radius:10px;border:2px solid #7D7D7D;font:12px/1.35 sans-serif;display:flex;flex-direction:column;gap:6px;min-width:300px;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:opacity .25s;overflow-y:auto;right:16px}
+#progressHUD h4{margin:0 0 4px 0;font-size:14px;font-weight:700}
+#mfWrap{display:flex;gap:8px}
+#mfWrap button{flex:1 1 0;background:var(--light);border-radius:8px}
+#mfWrap .sel{background:var(--rain-green)}
+.post__thumbnail{position:relative}
+.post-number-badge{position:absolute;bottom:4px;right:4px;background:var(--rain-blue);color:#fff;font-size:14px;font-weight:700;padding:4px 8px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform .2s,filter .2s;z-index:9999!important;pointer-events:none}
+.post-number-badge:hover{transform:translateY(-2px) scale(1.02);filter:brightness(1.1)}
+#filterBox{background:#fff;border:2px solid #7D7D7D;border-radius:8px;padding:6px 8px;min-height:26px;display:flex;align-items:center;color:#000}
+.pg-card-dislike{border:2px solid var(--rain-red)!important;border-radius:8px}
+.pg-card-new{border:2px solid var(--rain-green)!important;border-radius:8px}
+.pg-badge{display:inline-block;background:var(--light);color:var(--black);border:1px solid #7D7D7D;border-radius:6px;padding:2px 6px;font-size:12px;margin-left:4px}
+.pg-visit-summary{color:var(--black);margin-left:6px;font-size:12px}
+.pg-btn{font-size:14px;font-weight:600;color:#fff;border:none;border-radius:8px;cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2);padding:6px 10px;background:var(--desk)}
+.pg-btn+.pg-btn{margin-left:6px}
+button:disabled{opacity:.6;cursor:not-allowed}
+#scrapeStatus{font-size:12px;color:#1A1A1A;min-height:16px}
+`);
+
+
+
+const SPAWN_DELAY = 800;
+const imgRE = /\.(jpe?g|png|gif|webp|tiff|bmp|avif)$/i;
+const vidRE = /\.(mp4|m4v|mov|wmv|flv|avi|webm|mkv)$/i;
+const POSTS_PER_PAGE = 50;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const dataRoot = 'https://' + location.host + '/data';
+const userName = () => location.pathname.split('/')[3] || 'user';
+let DL_ACTIVE = false;
+let MEDIA_MODE = 'images';
+let LAST_QUEUE_HAD_ITEMS = false;
+let lastFilterParams = {};
+const retryMap = Object.create(null);
+const MAX_RETRIES = 3;
+const BACKOFF_BASE = 1200;
+const STALL_IMG_TOTAL_MS = 90000;
+const STALL_IMG_IDLE_MS = 45000;
+const STALL_VID_TOTAL_MS = 300000;
+const STALL_VID_IDLE_MS = 90000;
+let HUD_MODE = null;
+let HUD_EXTRA = '';
+let PG_TOTAL = null;
+let PG_GW = 1;
+
+function apiGetJson(url) {
+  return new Promise(resolve => {
+    GM_xmlhttpRequest({
+      method: 'GET',
+      url,
+      headers: {
+        Accept: 'text/css',
+        Referer: location.href,
+        'User-Agent': navigator.userAgent,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      onload: resp => {
+        if (resp.status >= 200 && resp.status < 300) {
+          try { resolve(JSON.parse(resp.responseText)); } catch { resolve(null); }
+        } else { resolve(null); }
+      },
+      onerror: () => resolve(null)
+    });
+  });
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function setStatus(text, type) {
+  const el = $('#filterStatus');
+  if (!el) return;
+  el.textContent = text || '';
+  if (type === 'error') el.style.color = '#b00020';
+  else if (type === 'success') el.style.color = '#0a7d2b';
+  else el.style.color = '#1A1A1A';
+}
+
+async function gmSaveText(name, text, saveAs = true) {
+  return new Promise(resolve => {
+    const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
+    GM_download({
+      url: dataUrl,
+      name,
+      saveAs,
+      onload: () => resolve(true),
+      onerror: () => resolve(false)
+    });
+  });
+}
+
+
+
+let injectTimer = null;
+
+function debounce(fn, delay) {
+  return () => { clearTimeout(injectTimer); injectTimer = setTimeout(fn, delay); };
+}
+
+function getListStats() {
+  let total = null;
+  let offset = 0;
+  const params = new URLSearchParams(location.search);
+  const o = parseInt(params.get('o') || '0', 10);
+  if (!isNaN(o) && o >= 0) offset = o;
+  const smalls = document.querySelectorAll('small');
+  for (const s of smalls) {
+    const t = (s.textContent || '').trim();
+    const m = t.match(/Showing\s+(\d+)\s*-\s*(\d+)\s*of\s*(\d+)/i);
+    if (m) {
+      const start = parseInt(m[1], 10);
+      const tot = parseInt(m[3], 10);
+      if (!isNaN(start) && !isNaN(tot)) {
+        total = tot;
+        offset = start - 1;
+        break;
+      }
+    }
+  }
+  return { total, offset };
+}
+
+function injectPostNumbers() {
+  document.querySelectorAll('.post-number-badge').forEach(el => el.remove());
+  const cards = [...document.querySelectorAll('article.post-card')].filter(c => c.style.display !== 'none');
+  if (!cards.length) return;
+  const stats = getListStats();
+  if (!stats.total || stats.total <= 0) return;
+  cards.forEach((card, i) => {
+    const thumb = card.querySelector('.post__thumbnail') || card;
+    thumb.style.position = 'relative';
+    const badge = document.createElement('div');
+    badge.className = 'post-number-badge';
+    const n = stats.total - (stats.offset + i);
+    badge.textContent = n > 0 ? n : '';
+    thumb.appendChild(badge);
+  });
+}
+
+function syncProgressHUDSize() {
+  const w = $('#partyHUD');
+  const p = $('#progressHUD');
+  if (!w || !p) return;
+  p.style.width = w.offsetWidth + 'px';
+  p.style.height = 'auto';
+  p.style.right = '16px';
+  p.style.bottom = (w.offsetHeight + 32) + 'px';
+}
+
+
+
+function buildHUD() {
+  if ($('#partyHUD')) return;
+
+  const w = document.createElement('div');
+  w.id = 'partyHUD';
+  w.innerHTML = `
+    <button id="dlBtn" class="full">Download</button>
+    <div class="hud-row"><button id="btnMedia">Images</button><button id="scrapeBtn">Scrape</button><button id="filterBtn">Filter</button></div>
+    <div id="filterBox"><span id="filterStatus"></span></div>
+    <label>Page <input id="fPages" type="text" placeholder="1,3-5"></label>
+    <label>Post <input id="fPosts" type="text" placeholder="Global e.g. 1-5,120"></label>
+  `;
+  document.body.appendChild(w);
+
+  $('#dlBtn').onclick = handleDlBtn;
+  $('#filterBtn').onclick = handleFilterOnly;
+  $('#scrapeBtn').onclick = handleScrape;
+
+  const p = document.createElement('div');
+  p.id = 'progressHUD';
+  p.style.display = 'none';
+  p.innerHTML = `
+    <h4 id="progressHeader">Progress: 0%</h4>
+    <div><strong>Total:</strong> <span id="totalCount">0</span></div>
+    <div><strong>Completed:</strong> <span id="completedCount">0</span></div>
+    <div><strong>Downloading:</strong> <span id="downloadingCount">0</span></div>
+    <div><strong>Queued:</strong> <span id="queuedCount">0</span></div>
+  `;
+  document.body.appendChild(p);
+
+  requestAnimationFrame(syncProgressHUDSize);
+
+  const btnMedia = $('#btnMedia');
+  btnMedia.onclick = () => {
+    MEDIA_MODE = MEDIA_MODE === 'images' ? 'videos' : MEDIA_MODE === 'videos' ? 'all' : 'images';
+    btnMedia.textContent = MEDIA_MODE === 'all' ? 'All' : MEDIA_MODE[0].toUpperCase() + MEDIA_MODE.slice(1);
+  };
+}
+
+function allowedUrl(u) {
+  const s = (u || '').split('?')[0];
+  const isImg = imgRE.test(s), isVid = vidRE.test(s);
+  if (MEDIA_MODE === 'all') return isImg || isVid;
+  if (MEDIA_MODE === 'images') return isImg;
+  if (MEDIA_MODE === 'videos') return isVid;
+  return false;
+}
+
+function resolveFileUrl(obj) {
+  if (!obj) return null;
+  if (obj.path) {
+    const p = obj.path.startsWith('/') ? obj.path : ('/' + obj.path);
+    if (obj.path.startsWith('http')) return obj.path;
+    return dataRoot + p;
+  }
+  if (obj.url && obj.url.startsWith('http')) return obj.url;
+  return null;
+}
+
+
+
+const dl = { items: [], started: false, dispatching: false };
+const cooldownTimers = new Map();
+
+function parLimit() { return 5; }
+
+function getCounts() {
+  let total = dl.items.length, completed = 0, downloading = 0, queued = 0;
+  for (const it of dl.items) {
+    if (it.status === 'done') completed++;
+    else if (it.status === 'active') downloading++;
+    else if (it.status === 'queued') queued++;
+  }
+  return { total, completed, downloading, queued };
+}
+
+let uiScheduled = false;
+let lastDropNoteAt = 0;
+let lastDropNoteCount = 0;
+
+function updateHUD() {
+  if (!uiScheduled) return;
+  uiScheduled = false;
+
+  const { total, completed, downloading, queued } = getCounts();
+  const percent = total ? Math.round((completed / total) * 100) : 0;
+
+  const h = $('#progressHeader');
+  if (h) h.textContent = `Progress: ${percent}%${lastDropNoteCount ? ` • Dropped ${lastDropNoteCount}` : ''}${HUD_MODE==='scrape' && HUD_EXTRA ? ` • ${HUD_EXTRA}` : ''}`;
+
+  const tC = $('#totalCount'); if (tC) tC.textContent = total;
+  const cC = $('#completedCount'); if (cC) cC.textContent = completed;
+  const dC = $('#downloadingCount'); if (dC) dC.textContent = downloading;
+  const qC = $('#queuedCount'); if (qC) qC.textContent = queued;
+
+  const ph = $('#progressHUD');
+  if (ph) {
+    if (total || completed || downloading || queued) {
+      ph.style.display = 'flex';
+      ph.style.opacity = '1';
+      syncProgressHUDSize();
+    } else if (HUD_MODE === 'scrape') {
+      ph.style.display = 'flex';
+      ph.style.opacity = '1';
+      syncProgressHUDSize();
+    } else {
+      ph.style.opacity = '0';
+      setTimeout(() => { const p = $('#progressHUD'); if (p) p.style.display = 'none'; }, 250);
+    }
+  }
+}
+
+function scheduleHUD() {
+  if (uiScheduled) return;
+  uiScheduled = true;
+  requestAnimationFrame(updateHUD);
+}
+
+function requestDispatch() {
+  if (dl.dispatching) return;
+  dl.dispatching = true;
+  queueMicrotask(() => {
+    try {
+      if (!dl.started) return;
+      let startedAny = false;
+      while (activeCount() < parLimit()) {
+        const it = claimNext();
+        if (!it) break;
+        startedAny = true;
+        startDownload(it);
+      }
+      if (startedAny) scheduleHUD();
+    } finally {
+      dl.dispatching = false;
+      if (dl.started && hasRunnableQueued() && activeCount() < parLimit()) requestDispatch();
+    }
+  });
+}
+
+function activeCount() {
+  let n = 0;
+  for (const it of dl.items) if (it.status === 'active') n++;
+  return n;
+}
+
+function hasRunnableQueued() {
+  const now = Date.now();
+  for (const it of dl.items) if (it.status === 'queued' && now >= (it.nextAt || 0)) return true;
+  return false;
+}
+
+function claimNext() {
+  const now = Date.now();
+  for (const it of dl.items) {
+    if (it.status === 'queued' && now >= (it.nextAt || 0)) { it.status = 'active'; return it; }
+  }
+  return null;
+}
+
+function enqueueItems(objs) {
+  const toAdd = [];
+  for (const obj of objs) {
+    const url = obj.url;
+    const name = obj.name;
+    const meta = obj.meta || null;
+    toAdd.push({ url, name, meta, status: 'queued', attempts: 0, nextAt: 0 });
+  }
+  if (!toAdd.length) return;
+  dl.items.push(...toAdd);
+  scheduleHUD();
+  if (dl.started) requestDispatch();
+}
+
+function maybeFinishBatch() {
+  const { total, completed, downloading, queued } = getCounts();
+  if (total > 0 && completed === total && downloading === 0 && queued === 0) {
+    DL_ACTIVE = false;
+    dl.started = false;
+    const b = $('#dlBtn'); if (b) { b.classList.remove('stop'); b.textContent = 'Download'; }
+  }
+}
+
+function startDownload(item) {
+  const name = item.name;
+  const isVid = vidRE.test(item.url);
+  const totalMs = isVid ? STALL_VID_TOTAL_MS : STALL_IMG_TOTAL_MS;
+  const idleMs = isVid ? STALL_VID_IDLE_MS : STALL_IMG_IDLE_MS;
+  let lastProgressAt = Date.now();
+  let settled = false;
+
+  const clearWatchers = () => { try { clearTimeout(tTotal); } catch {} try { clearInterval(tIdle); } catch {} };
+
+  const handleFailure = () => {
+    if (settled) return;
+    settled = true;
+    try { if (item._handle && typeof item._handle.abort === 'function') item._handle.abort(); } catch {}
+    clearWatchers();
+    const n = (retryMap[item.url] || 0) + 1;
+    retryMap[item.url] = n;
+    if (n <= MAX_RETRIES) {
+      const backoff = BACKOFF_BASE * Math.pow(2, n - 1) + Math.floor(Math.random() * 500);
+      item.status = 'queued';
+      item.nextAt = Date.now() + backoff;
+      const prev = cooldownTimers.get(item.url);
+      if (prev) clearTimeout(prev);
+      const tid = setTimeout(() => { item.nextAt = 0; scheduleHUD(); if (dl.started) requestDispatch(); }, backoff + 5);
+      cooldownTimers.set(item.url, tid);
+      scheduleHUD();
+      setTimeout(requestDispatch, 0);
+    } else {
+      const idx = dl.items.indexOf(item);
+      if (idx >= 0) dl.items.splice(idx, 1);
+      lastDropNoteAt = Date.now();
+      lastDropNoteCount++;
+      scheduleHUD();
+      setTimeout(requestDispatch, SPAWN_DELAY + Math.floor(Math.random() * 200));
+      maybeFinishBatch();
+    }
+  };
+
+  const tTotal = setTimeout(() => handleFailure(), totalMs);
+  const tIdle = setInterval(() => {
+    if (Date.now() - lastProgressAt > idleMs) handleFailure();
+  }, 2000);
+
+  const handle = GM_download({
+    url: item.url,
+    name,
+    headers: { Referer: location.href, Accept: 'text/css' },
+    timeout: 0,
+    onprogress: () => { lastProgressAt = Date.now(); },
+    onload: () => {
+      if (settled) return;
+      settled = true;
+      clearWatchers();
+      item.status = 'done';
+      scheduleHUD();
+      setTimeout(requestDispatch, SPAWN_DELAY + Math.floor(Math.random() * 200));
+      maybeFinishBatch();
+    },
+    onerror: () => handleFailure()
+  });
+  item._handle = handle;
+}
+
+
+
+function parsePages(str) {
+  const set = new Set();
+  if (!str.trim()) return null;
+  str.split(',').forEach(p => {
+    if (p.includes('-')) {
+      const [a, b] = p.split('-').map(Number);
+      if (!a || !b || a <= 0 || b < a) return;
+      for (let i = a; i <= b; i++) set.add(i);
+    } else {
+      const n = parseInt(p, 10);
+      if (!n || n <= 0) return;
+      set.add(n);
+    }
+  });
+  return set.size ? [...set].sort((a, b) => a - b) : null;
+}
+
+function parseIndices(str) {
+  const set = new Set();
+  if (!str.trim()) return null;
+  str.split(',').forEach(token => {
+    if (token.includes('-')) {
+      const [a, b] = token.split('-').map(Number);
+      if (!a || !b || a <= 0 || b < a) return;
+      for (let i = a; i <= b; i++) set.add(i);
+    } else {
+      const n = parseInt(token, 10);
+      if (!n || n <= 0) return;
+      set.add(n);
+    }
+  });
+  return set.size ? new Set([...set].sort((a, b) => a - b)) : new Set();
+}
+
+
+
+const slug = s => (s || 'untitled').trim().replace(/[\s\\/:*?"<>|]+/g, '_').slice(0, 60);
+
+function formatFilename(post, fileObj, index, globalIndex) {
+  const user = post.user || userName();
+  const iso = post.published || post.added || '';
+  let shortDate = '000000';
+  if (iso) {
+    const d = new Date(iso);
+    if (!isNaN(d)) {
+      const yy = String(d.getFullYear() % 100).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      shortDate = yy + mm + dd;
+    }
+  }
+  const sanitizeSection = s => {
+    s = (s || '').normalize('NFC');
+    s = s.replace(/\s+/g, '_');
+    s = s.replace(/[\\/:*?"<>|]+/g, '');
+    s = s.replace(/[\x00-\x1F\x7F]/g, '');
+    s = s.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+    return s;
+  };
+  const titleRaw = (post.title && post.title.trim()) ? post.title : ('post_' + post.id);
+  const userSec = sanitizeSection(user);
+  const titleSec = sanitizeSection(titleRaw).slice(0, 60);
+  const idSec = String(post.id);
+  const idx = String(index).padStart(2, '0');
+  const ext = (fileObj.name || fileObj.path || '').split('.').pop().split('?')[0].toLowerCase();
+  const globalStr = (typeof globalIndex === 'number' && globalIndex > 0) ? String(globalIndex).padStart(PG_GW || 1, '0') : null;
+  if (globalStr) {
+    return `${userSec} - ${shortDate} - ${globalStr} - ${titleSec} - ${idSec} - ${idx}.${ext}`;
+  } else {
+    return `${userSec} - ${shortDate} - ${titleSec} - ${idSec} - ${idx}.${ext}`;
+  }
+}
+
+
+
+let keptPosts = [];
+
+async function handleFilter() {
+  const st = $('#filterStatus');
+  if (st) st.textContent = '';
+
+  const pagesRaw = $('#fPages')?.value || '';
+  const postsRaw = $('#fPosts')?.value || '';
+  const globalPosts = parseIndices(postsRaw);
+  if (postsRaw.trim() && (!globalPosts || globalPosts.size === 0)) { if (st) st.textContent = 'Invalid posts'; return; }
+  const filteringByPosts = globalPosts && globalPosts.size;
+
+  const stats0 = getListStats();
+  if (stats0.total && stats0.total > 0) { PG_TOTAL = stats0.total; PG_GW = String(PG_TOTAL).length; } else { PG_TOTAL = null; PG_GW = 1; }
+
+  keptPosts = [];
+
+  const [, service, , userId] = location.pathname.split('/');
+  lastFilterParams = { postRaw: postsRaw, service, media: MEDIA_MODE };
+
+  const allowed = new Set();
+  let totalFiles = 0;
+
+  let perPageMap = null;
+  let pages = null, allPages = false;
+
+  if (filteringByPosts) {
+    const total = PG_TOTAL;
+    if (!total || total <= 0) { if (st) st.textContent = 'Unable to resolve total posts'; return; }
+
+    perPageMap = new Map();
+    let dropped = 0;
+    [...globalPosts].forEach(n => {
+      if (n < 1 || n > total) { dropped++; return; }
+      const offset = total - n;
+      const page = Math.floor(offset / POSTS_PER_PAGE) + 1;
+      const local = (offset % POSTS_PER_PAGE) + 1;
+      if (!perPageMap.has(page)) perPageMap.set(page, new Set());
+      perPageMap.get(page).add(local);
+    });
+    if (dropped && st) st.textContent = `Ignored ${dropped} invalid indices`;
+
+    const derivedPages = [...perPageMap.keys()].sort((a,b)=>a-b);
+
+    if (!pagesRaw.trim()) {
+      pages = derivedPages;
+    } else {
+      const userPages = parsePages(pagesRaw);
+      if (!userPages) { if (st) st.textContent = 'Invalid pages'; return; }
+      const userSet = new Set(userPages);
+      pages = derivedPages.filter(p => userSet.has(p));
+      if (!pages.length) { if (st) st.textContent = 'No matching pages for given posts'; return; }
+    }
+  } else {
+    if (!pagesRaw.trim()) {
+      allPages = true;
+    } else {
+      pages = parsePages(pagesRaw);
+      if (!pages) { if (st) st.textContent = 'Invalid pages'; return; }
+    }
+  }
+
+  const procPage = async pg => {
+    if (st) st.textContent = 'Fetching page ' + pg;
+    try {
+      const url = `/api/v1/${service}/user/${userId}/posts?o=${(pg - 1) * POSTS_PER_PAGE}&_=${Date.now()}_${pg}`;
+      const apiResp = await apiGetJson(url);
+      const arr = Array.isArray(apiResp) ? apiResp : (apiResp && (apiResp.results || apiResp.posts)) || [];
+      if (!Array.isArray(arr) || arr.length === 0) return false;
+
+      for (const [i, p] of arr.entries()) {
+        if (filteringByPosts) {
+          const need = perPageMap && perPageMap.get(pg);
+          if (!need || !need.has(i + 1)) continue;
+        }
+
+        const refs = [];
+        const add = o => { const u = resolveFileUrl(o); if (u) refs.push(u); };
+        if (p.file) add(p.file);
+        if (p.attachments) p.attachments.forEach(add);
+
+        const allowedFiles = [];
+        for (const ref of refs) {
+          if (!allowedUrl(ref)) continue;
+          allowedFiles.push(ref);
+        }
+        if (!allowedFiles.length) continue;
+
+        const globalIndex = (PG_TOTAL && PG_TOTAL > 0) ? (PG_TOTAL - (((pg - 1) * POSTS_PER_PAGE) + i)) : null;
+
+        allowed.add(String(p.id));
+        keptPosts.push({ post: p, allowedFiles, globalIndex });
+        totalFiles += allowedFiles.length;
+      }
+
+      return arr.length === POSTS_PER_PAGE;
+    } catch {
+      return false;
+    }
+  };
+
+  if (allPages) {
+    let pg = 1;
+    while (await procPage(pg++)) { }
+  } else {
+    for (const pg of pages) await procPage(pg);
+  }
+
+  $$('article.post-card').forEach(c => {
+    const id = c.getAttribute('data-id');
+    c.style.display = allowed.has(id) ? '' : 'none';
+  });
+
+  if (st) st.textContent = 'Showing ' + keptPosts.length + ' posts and ' + totalFiles + ' files';
+  injectPostNumbers();
+  syncProgressHUDSize();
+  scheduleHUD();
+}
+
+async function handleFilterOnly() { await handleFilter(); }
+
+async function queueFiltered() {
+  if (!keptPosts.length) return;
+  const objs = [];
+  keptPosts.forEach(kp => {
+    const { post, allowedFiles, globalIndex } = kp;
+    let idx = 1;
+    allowedFiles.forEach(ref => {
+      const fileObj = { path: ref };
+      const name = formatFilename(post, fileObj, idx++, globalIndex);
+      objs.push({ url: ref, name, meta: { post, index: idx - 1, url: ref, globalIndex } });
+    });
+  });
+  if (!objs.length) {
+    const st = $('#filterStatus');
+    if (st) st.textContent = 'No files matched your filters.';
+    scheduleHUD();
+    return;
+  }
+  LAST_QUEUE_HAD_ITEMS = true;
+  enqueueItems(objs);
+}
+
+
+
+async function handleScrape() {
+  const btn = $('#scrapeBtn');
+  btn.disabled = true;
+  setStatus('Preparing...','info');
+
+  const parts = location.pathname.split('/');
+  const service = parts[1];
+  const userId  = parts[3];
+
+  if (!service || !userId) {
+    setStatus('Go to a user page first (e.g., /{service}/user/{userId}).','error');
+    btn.disabled = false;
+    return;
+  }
+
+  const all = [];
+  let pg = 1;
+
+  while (true) {
+    const o = (pg - 1) * POSTS_PER_PAGE;
+    setStatus(`Fetching page ${pg}...`,'info');
+
+    const apiUrl = `/api/v1/${service}/user/${userId}/posts?o=${o}`;
+    const resp = await apiGetJson(apiUrl);
+    const arr = Array.isArray(resp) ? resp : (resp && (resp.results || resp.posts)) || [];
+
+    if (!Array.isArray(arr) || arr.length === 0) break;
+    all.push(...arr);
+    if (arr.length < POSTS_PER_PAGE) break;
+
+    pg++;
+    await sleep(300 + Math.floor(Math.random()*400));
+  }
+
+  if (!all.length) {
+    setStatus('No posts found to scrape.','error');
+    btn.disabled = false;
+    return;
+  }
+
+  const ndjson = all.map(o=>JSON.stringify(o)).join('\n');
+  const now = new Date();
+  const y = String(now.getFullYear());
+  const M = String(now.getMonth()+1).padStart(2,'0');
+  const D = String(now.getDate()).padStart(2,'0');
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  const base = `${service}_${userId}_${y}${M}${D}${h}${m}${s}_posts`;
+  const mainName = `${base}.txt`;
+
+  setStatus(`Saving ${all.length} posts...`,'info');
+  const ok = await gmSaveText(mainName, ndjson, true);
+
+  if (ok) {
+    setStatus(`Saved ${mainName} (${all.length} posts).`,'success');
+    btn.disabled = false;
+    return;
+  }
+
+  const TARGET = 700000;
+  const lines = ndjson.split('\n');
+  const partsOut = [];
+  let buf = [];
+  let charCount = 0;
+
+  for (let i=0;i<lines.length;i++){
+    const line = lines[i];
+    const add = line.length + 1;
+    if (charCount + add > TARGET && buf.length){
+      partsOut.push(buf.join('\n'));
+      buf = [];
+      charCount = 0;
+    }
+    buf.push(line);
+    charCount += add;
+  }
+  if (buf.length) partsOut.push(buf.join('\n'));
+
+  let success = 0;
+  for (let i=0;i<partsOut.length;i++){
+    const name = `${base}_part${String(i+1).padStart(2,'0')}.txt`;
+    const okPart = await gmSaveText(name, partsOut[i], true);
+    if (okPart) success++;
+    await sleep(120);
+  }
+
+  if (success>0){
+    setStatus(`Saved ${success}/${partsOut.length} part(s) (${all.length} posts).`,'success');
+  } else {
+    setStatus('Failed to save scrape output.','error');
+  }
+  btn.disabled = false;
+}
+
+
+
+async function handleDlBtn() {
+  const b = $('#dlBtn');
+
+  if (!DL_ACTIVE) {
+    dl.started = false;
+    DL_ACTIVE = false;
+    LAST_QUEUE_HAD_ITEMS = false;
+    keptPosts = [];
+    lastFilterParams = {};
+    for (const k in retryMap) delete retryMap[k];
+    cooldownTimers.forEach(id => clearTimeout(id));
+    cooldownTimers.clear();
+    dl.items.length = 0;
+    lastDropNoteAt = 0;
+    lastDropNoteCount = 0;
+    const ph = $('#progressHUD');
+    if (ph) { ph.style.opacity = '0'; ph.style.display = 'none'; }
+    const st = $('#filterStatus'); if (st) st.textContent = '';
+    const tC = $('#totalCount'); if (tC) tC.textContent = '0';
+    const cC = $('#completedCount'); if (cC) cC.textContent = '0';
+    const dC = $('#downloadingCount'); if (dC) dC.textContent = '0';
+    const qC = $('#queuedCount'); if (qC) qC.textContent = '0';
+    const h = $('#progressHeader'); if (h) h.textContent = 'Progress: 0%';
+    await handleFilter();
+    await queueFiltered();
+
+    if (LAST_QUEUE_HAD_ITEMS) {
+      DL_ACTIVE = true;
+      dl.started = true;
+      b.classList.add('stop');
+      b.textContent = 'Stop';
+      requestDispatch();
+      scheduleHUD();
+    } else {
+      DL_ACTIVE = false;
+      dl.started = false;
+      b.classList.remove('stop');
+      b.textContent = 'Download';
+      scheduleHUD();
+    }
+  } else {
+    dl.started = false;
+    DL_ACTIVE = false;
+    b.classList.remove('stop');
+    b.textContent = 'Download';
+    scheduleHUD();
+  }
+}
+
+
+
+function pgUserKey(slug) { return 'pg_u_' + slug; }
+
+function pgExtractSummary(url, orUser) {
+  const m = (url || '').match(/\/user\/([^/]+)/);
+  if (m) {
+    const k = pgUserKey(m[1]);
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(k) || 'null'); } catch { }
+    if (s && !s.user) s.user = m[1];
+    return s ? s : (orUser ? m[1] : s);
+  }
+  return false;
+}
+
+function pgLoadSummary(slug) {
+  const k = pgUserKey(slug);
+  try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; }
+}
+
+function pgSaveSummary(slug, obj) {
+  const k = pgUserKey(slug);
+  try { localStorage.setItem(k, JSON.stringify(obj)); } catch { }
+}
+
+function pgTodayISO() { return new Date().toISOString().split('T')[0]; }
+
+function pgEnsureVisit(slug) {
+  let s = pgLoadSummary(slug);
+  const today = pgTodayISO();
+
+  if (!s) {
+    s = { user: slug, visits: 1, previousVisit: false, lastVisit: today, disliked: false };
+  } else {
+    if (s.lastVisit !== today) {
+      s.visits = (s.visits || 0) + 1;
+      s.previousVisit = s.lastVisit || false;
+      s.lastVisit = today;
+      if (!s.user) s.user = slug;
+      if (typeof s.disliked !== 'boolean') s.disliked = false;
+    }
+  }
+
+  pgSaveSummary(slug, s);
+  return s;
+}
+
+function pgTextContains(el, txt) { return el && typeof el.textContent === 'string' && el.textContent.trim() === txt; }
+
+function pgCopyText(str) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(str).catch(() => { });
+  } else {
+    const t = document.createElement('textarea');
+    t.value = str;
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); } catch { }
+    t.remove();
+  }
+}
+
+function pgEnhanceUserPages(root) {
+  const up = location.pathname.match(/\/user\/([^/]+)$/);
+  const upp = location.pathname.match(/\/user\/([^/]+)\/post/);
+  if (!up && !upp) return;
+
+  const slug = (up || upp)[1];
+  const cssPrefix = up ? 'user-header' : 'post';
+  const summary = pgEnsureVisit(slug);
+
+  if (up) {
+    if (!document.querySelector('.pg-visit-summary')) {
+      const parent = $(`.${cssPrefix}__info`);
+      if (parent) {
+        const wrap = document.createElement('div');
+        const span = document.createElement('span');
+        span.className = 'pg-visit-summary';
+        span.textContent = summary.previousVisit ? `Visited ${summary.visits} times, last visit on ${summary.previousVisit}` : `First visit`;
+        wrap.appendChild(span);
+        parent.appendChild(wrap);
+      }
+    }
+  } else {
+    if (!document.querySelector('.pg-visit-summary')) {
+      const parent = $(`.${cssPrefix}__published`);
+      if (parent) {
+        const span = document.createElement('span');
+        span.className = 'pg-visit-summary';
+        span.textContent = summary.previousVisit ? `Visited ${summary.visits} times, last visit on ${summary.previousVisit}` : `First visit`;
+        parent.appendChild(span);
+      }
+    }
+
+    const navTop = $('nav.post__nav-links'), footer = $('footer.post__footer');
+    if (navTop && footer && !footer.querySelector('.pg-nav-clone')) {
+      const clone = navTop.cloneNode(true);
+      clone.classList.add('pg-nav-clone');
+      footer.appendChild(clone);
+    }
+
+    if (root.querySelectorAll || root.tagName === 'H2') {
+      const headers = root.tagName === 'H2' ? [root] : document.querySelectorAll('h2');
+      headers.forEach(h => {
+        if (pgTextContains(h, 'Downloads') && !h.querySelector('.pg-copy-btn')) {
+          const btn = document.createElement('button');
+          btn.type = 'button'; btn.className = 'pg-btn pg-copy-btn'; btn.textContent = 'Copy';
+          btn.onclick = () => {
+            let out = ''; let c = 0;
+            document.querySelectorAll('a.post__attachment-link').forEach(a => { out += a.href + '\n'; c++; });
+            if (out) pgCopyText(out);
+          };
+          h.appendChild(btn);
+        }
+      });
+    }
+  }
+
+  if (!$(`.${cssPrefix}__actions .pg-dislike-btn`)) {
+    const act = $(`.${cssPrefix}__actions`);
+    if (act) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'pg-btn pg-dislike-btn';
+      btn.textContent = summary.disliked ? 'Undislike' : 'Dislike';
+      btn.onclick = () => {
+        const s = pgLoadSummary(slug) || { user: slug, visits: 1, previousVisit: false, lastVisit: pgTodayISO(), disliked: false };
+        s.disliked = !s.disliked;
+        pgSaveSummary(slug, s);
+        btn.textContent = s.disliked ? 'Undislike' : 'Dislike';
+      };
+      act.appendChild(btn);
+    }
+  }
+}
+
+function pgEnhanceArtists(root) {
+  if (!/\/artists/.test(location.pathname)) return;
+
+  const processCard = card => {
+    if (!card || card.classList.contains('pg-enhanced')) return;
+    const summary = pgExtractSummary(card.href);
+    card.classList.add('pg-enhanced');
+    const svc = card.querySelector('span.user-card__service');
+
+    if (summary) {
+      const visits = document.createElement('span'); visits.className = 'pg-badge'; visits.textContent = `Visits: ${summary.visits || 0}`;
+      if (svc) svc.insertAdjacentElement('afterend', visits);
+
+      if (summary.previousVisit) {
+        const days = Math.floor((new Date() - new Date(summary.previousVisit)) / (1000 * 60 * 60 * 24));
+        const d = document.createElement('span'); d.className = 'pg-badge'; d.textContent = `Days: ${days}`; d.title = `Last visit: ${summary.previousVisit}`;
+        visits.insertAdjacentElement('afterend', d);
+      }
+
+      if (summary.disliked) card.classList.add('pg-card-dislike');
+    } else {
+      card.classList.add('pg-card-new');
+    }
+  };
+
+  if (root.tagName === 'A' && root.classList.contains('user-card')) {
+    processCard(root);
+  } else {
+    root.querySelectorAll && root.querySelectorAll('a.user-card').forEach(processCard);
+  }
+}
+
+function pgEnhancePostsList(root) {
+  if (!/\/posts/.test(location.pathname)) return;
+
+  const processCard = card => {
+    if (!card || card.classList.contains('pg-enhanced')) return;
+    const link = card.querySelector('a'); if (!link) return;
+    const data = pgExtractSummary(link.href, true);
+    card.classList.add('pg-enhanced');
+
+    const footDiv = card.querySelector('footer > div');
+    if (data && typeof data === 'object') {
+      if (footDiv) footDiv.textContent = `${data.user || ''} (${data.visits || 0})`;
+      if (data.disliked) card.classList.add('pg-card-dislike');
+    } else if (typeof data === 'string') {
+      if (footDiv) footDiv.textContent = data;
+      card.classList.add('pg-card-new');
+    }
+  };
+
+  if (root.tagName === 'ARTICLE' && root.classList.contains('post-card')) {
+    processCard(root);
+  } else {
+    root.querySelectorAll && root.querySelectorAll('article.post-card').forEach(processCard);
+  }
+}
+
+function pgOptimizeRoot(root) {
+  pgEnhanceUserPages(root);
+  pgEnhanceArtists(root);
+  pgEnhancePostsList(root);
+}
+
+
+
+buildHUD();
+injectPostNumbers();
+
+const observer = new MutationObserver(debounce(injectPostNumbers, 100));
+observer.observe(document.body, { childList: true, subtree: true });
+
+const optimizerObserver = new MutationObserver(muts => {
+  for (const m of muts) {
+    if (m.type === 'childList' && m.addedNodes.length) {
+      pgOptimizeRoot(m.addedNodes[0]);
+    }
+  }
+});
+optimizerObserver.observe(document.body, { childList: true, subtree: true });
+
+pgOptimizeRoot(document.body);
+window.addEventListener('resize', syncProgressHUDSize);
