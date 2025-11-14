@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         _PartyGuest
-// @version      1.9.5
-// @description  A tool for downloading images and videos from Coomer or Kemono
+// @version      01.09.32
+// @description  A tool for downloading images and videos from Coomer/Kemono
 // @author       normal person
 // @match        *://coomer.st/*
 // @match        *://kemono.cr/*
@@ -18,8 +18,6 @@ GM_addStyle(`
 button{transition:transform .15s cubic-bezier(.2,.8,.4,1),filter .15s}
 button:hover{transform:translateY(-2px);filter:brightness(1.1)}
 button:active{transform:translateY(0)}
-.hud-row{display:flex;gap:8px}
-.hud-row>button{flex:1 1 0}
 .full{width:100%}
 .post__files{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;justify-items:left;}
 .post__thumbnail img{width:100%;height:auto;border-radius:8px;border:2px solid var(--rain-orange);box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform .2s,box-shadow .2s;cursor:pointer;}
@@ -27,24 +25,61 @@ button:active{transform:translateY(0)}
 .post__nav-links{position:sticky;top:5px;z-index:100;background:var(--beige);padding:4px 8px;border-radius:8px;border:2px solid #7D7D7D;margin:5px auto;width:98%;}
 .post__body>.ad-container,[class*="bottomRight--"],[class*="slideAnimation--"]{display:none!important;}
 .ad-container-slider{background:transparent!important}
-#partyHUD{position:fixed;bottom:16px;right:16px;z-index:9999;background:rgba(227,220,203,.85);color:var(--black);padding:14px 16px;border-radius:10px;border:2px solid #7D7D7D;font:14px/1.35 "Inter",sans-serif;display:flex;flex-direction:column;gap:10px;min-width:300px;box-shadow:0 2px 6px rgba(0,0,0,.25)}
-#partyHUD label{display:flex;align-items:center;gap:6px}
-#partyHUD input[type="text"]{width:100%;background:#F5F1E8;color:var(--black);border:1px solid #A8A8A8;border-radius:6px;padding:6px 8px}
-#partyHUD button{font-size:18px;text-shadow:0 3px 0 rgba(0,0,0,.15);padding:12px;font-weight:700;color:#fff;border:none;border-radius:8px;cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
+#partyHUD{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%);
+  bottom:10px;
+  z-index:9999;
+  background:var(--beige);
+  color:var(--black);
+  padding:8px 12px;
+  border-radius:10px;
+  border:2px solid #7D7D7D;
+  font:16px/1.35 "Inter",sans-serif;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+  width:max-content;
+  max-width:98vw;
+}
+#partyHUD .full{width:auto}
+#hudRow{
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:8px;
+  width:auto;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#hudRow > button{flex:0 0 auto}
+#partyHUD input[type="text"],#partyHUD input[type="number"]{background:#F5F1E8;color:var(--black);border:1px solid #A8A8A8;border-radius:6px;padding:7px 8px}
+#hudRow input[type="text"],#hudRow input[type="number"]{width:120px;flex:0 0 auto}
+#partyHUD button{font-size:16px;text-shadow:0 3px 0 rgba(0,0,0,.15);padding:10px 12px;font-weight:700;color:#fff;border:none;border-radius:8px;cursor:pointer;box-shadow:inset 0 -2px 0 rgba(0,0,0,.2)}
 #dlBtn{background:var(--rain-blue)}
-#scrapeBtn{background:var(--rain-yellow)}
-#filterBtn{background:var(--rain-green)}
-#btnMedia{background:var(--rain-orange)!important}
 #dlBtn.stop{background:var(--rain-red)}
-#progressHUD{position:fixed;z-index:9999;background:rgba(227,220,203,.85);color:var(--black);padding:12px 16px;border-radius:10px;border:2px solid #7D7D7D;font:12px/1.35 sans-serif;display:flex;flex-direction:column;gap:6px;min-width:300px;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:opacity .25s;overflow-y:auto;right:16px}
-#progressHUD h4{margin:0 0 4px 0;font-size:14px;font-weight:700}
-#mfWrap{display:flex;gap:8px}
-#mfWrap button{flex:1 1 0;background:var(--light);border-radius:8px}
-#mfWrap .sel{background:var(--rain-green)}
+#queueBtn{background:var(--rain-blue)!important}
+#filterBtn{background:var(--rain-green)}
+#btnMedia{background:var(--rain-orange)!important;min-width:90px}
+#scrapeBtn{background:var(--rain-indigo)}
+#clearBtn{background:var(--rain-red)}
+#filterBox{background:#fff;border:2px solid #7D7D7D;border-radius:8px;padding:8px 10px;min-height:30px;display:inline-flex;align-items:center;color:#000;align-self:stretch;width:100%;gap:10px}
+#filterStatus{flex:1 1 auto;min-width:0}
+#pgRight{margin-left:auto;display:flex;align-items:center;gap:10px;white-space:nowrap}
+#pgMini{display:flex;align-items:center;gap:10px;white-space:nowrap}
+#pgDrop{display:flex;align-items:center;gap:10px;white-space:nowrap}
+#pgWrap{width:calc(100% - 24px);display:flex;align-items:center;gap:8px}
+#pgTrack{position:relative;flex:1 1 auto;height:8px;background:#eee;border:1px solid #C8C8C8;border-radius:6px;overflow:hidden}
+#pgFill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,var(--rain-blue),#5AA9FF);transition:width .25s ease}
+#pgBarLabel{font-weight:700;font-size:12px;color:var(--black);min-width:34px;text-align:right}
+.pgDot{opacity:.6}
 .post__thumbnail{position:relative}
-.post-number-badge{position:absolute;bottom:4px;right:4px;background:var(--rain-blue);color:#fff;font-size:14px;font-weight:700;padding:4px 8px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform .2s,filter .2s;z-index:9999!important;pointer-events:none}
+.pg-post-select-wrap{position:absolute;bottom:4px;right:4px;display:flex;align-items:center;gap:4px;z-index:9999;min-width:28px;min-height:28px;justify-content:flex-end;cursor:pointer}
+.pg-post-select-checkbox{width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--rain-blue)}
+.post-number-badge{background:var(--rain-blue);color:#fff;font-size:14px;font-weight:700;padding:4px 8px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:transform .2s,filter .2s;pointer-events:none}
 .post-number-badge:hover{transform:translateY(-2px) scale(1.02);filter:brightness(1.1)}
-#filterBox{background:#fff;border:2px solid #7D7D7D;border-radius:8px;padding:6px 8px;min-height:26px;display:flex;align-items:center;color:#000}
 .pg-card-dislike{border:2px solid var(--rain-red)!important;border-radius:8px}
 .pg-card-new{border:2px solid var(--rain-green)!important;border-radius:8px}
 .pg-badge{display:inline-block;background:var(--light);color:var(--black);border:1px solid #7D7D7D;border-radius:6px;padding:2px 6px;font-size:12px;margin-left:4px}
@@ -53,6 +88,32 @@ button:active{transform:translateY(0)}
 .pg-btn+.pg-btn{margin-left:6px}
 button:disabled{opacity:.6;cursor:not-allowed}
 #scrapeStatus{font-size:12px;color:#1A1A1A;min-height:16px}
+.post-card.pg-nohover:hover>a{top:0!important;transform:none!important;transition:none!important}
+.ad-container,
+.blockitsowereplaceit,
+.prm-wrapper,
+.p-header,
+.shareButtons-buttons,
+.p-breadcrumbs.p-breadcrumbs--bottom,
+.blockMessage.blockMessage--none,
+.p-description,
+.actionBar-set.actionBar-set--internal,
+.reactionsBar.js-reactionsList.is-active,
+.p-navEl-link.nav-bonga,
+.p-navEl-link.nav-dfake,
+.p-navEl-link.nav-tpd,
+.ts-outstream-video__video,
+#announcement-banner,
+.ts-im-container,
+#footer,
+#footer-about,
+.ad-container,
+.allow-same-origin.allow-popups.allow-forms.allow-scripts.allow-popups-to-escape-sandbox,
+.ts-outstream-video__video,
+.ts-outstream-video__video_vertical,
+#ad-banner
+.leadimage
+{display:none!important}
 `);
 
 
@@ -66,7 +127,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const dataRoot = 'https://' + location.host + '/data';
 const userName = () => location.pathname.split('/')[3] || 'user';
 let DL_ACTIVE = false;
-let MEDIA_MODE = 'images';
+let MEDIA_MODE = 'all';
 let LAST_QUEUE_HAD_ITEMS = false;
 let lastFilterParams = {};
 const retryMap = Object.create(null);
@@ -80,6 +141,8 @@ let HUD_MODE = null;
 let HUD_EXTRA = '';
 let PG_TOTAL = null;
 let PG_GW = 1;
+let PG_INDEX_MAP = null;
+let PG_INDEX_PROMISE = null;
 
 function apiGetJson(url) {
   return new Promise(resolve => {
@@ -111,6 +174,8 @@ function setStatus(text, type) {
   if (type === 'error') el.style.color = '#b00020';
   else if (type === 'success') el.style.color = '#0a7d2b';
   else el.style.color = '#1A1A1A';
+  syncFilterBoxVisibility();
+  syncProgressBarVisibility();
 }
 
 async function gmSaveText(name, text, saveAs = true) {
@@ -157,34 +222,204 @@ function getListStats() {
   return { total, offset };
 }
 
+function updatePostSelectorFromCheckbox(num, isChecked) {
+  const input = $('#fPosts');
+  if (!input) return;
+  const value = input.value || '';
+  const tokens = value.split(',').map(s => s.trim()).filter(Boolean);
+  const strNum = String(num);
+  const has = tokens.includes(strNum);
+  if (isChecked) {
+    if (!has) tokens.push(strNum);
+  } else {
+    if (has) {
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        if (tokens[i] === strNum) tokens.splice(i, 1);
+      }
+    }
+  }
+  let next = tokens.join(', ');
+  if (tokens.length) next += ', ';
+  input.value = next;
+}
+
+function handlePostCheckboxChange(e) {
+  const el = e.currentTarget;
+  const num = parseInt(el.dataset.pgPostNumber || '', 10);
+  if (!num || num <= 0) return;
+  updatePostSelectorFromCheckbox(num, el.checked);
+}
+
 function injectPostNumbers() {
-  document.querySelectorAll('.post-number-badge').forEach(el => el.remove());
-  const cards = [...document.querySelectorAll('article.post-card')].filter(c => c.style.display !== 'none');
-  if (!cards.length) return;
-  const stats = getListStats();
-  if (!stats.total || stats.total <= 0) return;
-  cards.forEach((card, i) => {
+  document.querySelectorAll('.pg-post-select-wrap, .post-number-badge').forEach(el => el.remove());
+  const initialCards = [...document.querySelectorAll('article.post-card')].filter(c => c.style.display !== 'none');
+  if (!initialCards.length) return;
+
+  const buildOverlay = (card, n, selectedSet) => {
+    if (!n || n <= 0) return;
     const thumb = card.querySelector('.post__thumbnail') || card;
     thumb.style.position = 'relative';
+    const wrap = document.createElement('div');
+    wrap.className = 'pg-post-select-wrap';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'pg-post-select-checkbox';
+    cb.dataset.pgPostNumber = String(n);
+    if (selectedSet.has(n)) cb.checked = true;
+    cb.addEventListener('change', handlePostCheckboxChange);
+    cb.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const num = parseInt(cb.dataset.pgPostNumber || '', 10);
+      if (!num || num <= 0) return;
+      const next = !cb.checked;
+      cb.checked = next;
+      updatePostSelectorFromCheckbox(num, next);
+    });
+    cb.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    wrap.addEventListener('pointerdown', e => {
+      if (e.target === cb) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const num = parseInt(cb.dataset.pgPostNumber || '', 10);
+      if (!num || num <= 0) return;
+      const next = !cb.checked;
+      cb.checked = next;
+      updatePostSelectorFromCheckbox(num, next);
+    });
+    wrap.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    wrap.addEventListener('mouseenter', () => {
+      card.classList.add('pg-nohover');
+    });
+    wrap.addEventListener('mouseleave', () => {
+      card.classList.remove('pg-nohover');
+    });
     const badge = document.createElement('div');
     badge.className = 'post-number-badge';
-    const n = stats.total - (stats.offset + i);
     badge.textContent = n > 0 ? n : '';
-    thumb.appendChild(badge);
-  });
+    wrap.appendChild(cb);
+    wrap.appendChild(badge);
+    thumb.appendChild(wrap);
+  };
+
+  const parts = location.pathname.split('/');
+  const service = parts[1];
+  const userId = parts[3];
+
+  if (service && userId) {
+    ensureGlobalIndexMap().then(map => {
+      const cards = [...document.querySelectorAll('article.post-card')].filter(c => c.style.display !== 'none');
+      if (!cards.length) return;
+      let selectedSet = new Set();
+      const postsInput = $('#fPosts');
+      if (postsInput && postsInput.value && postsInput.value.trim()) {
+        const parsed = parseIndices(postsInput.value);
+        if (parsed && parsed.size) selectedSet = parsed;
+      }
+      if (!map || !map.size) {
+        const stats = getListStats();
+        if (!stats.total || stats.total <= 0) return;
+        cards.forEach((card, i) => {
+          const n = stats.total - (stats.offset + i);
+          buildOverlay(card, n, selectedSet);
+        });
+        return;
+      }
+      cards.forEach(card => {
+        const id = card.getAttribute('data-id');
+        if (!id) return;
+        const n = map.get(String(id));
+        if (!n || n <= 0) return;
+        buildOverlay(card, n, selectedSet);
+      });
+    });
+  } else {
+    const stats = getListStats();
+    if (!stats.total || stats.total <= 0) return;
+    let selectedSet = new Set();
+    const postsInput = $('#fPosts');
+    if (postsInput && postsInput.value && postsInput.value.trim()) {
+      const parsed = parseIndices(postsInput.value);
+      if (parsed && parsed.size) selectedSet = parsed;
+    }
+    initialCards.forEach((card, i) => {
+      const n = stats.total - (stats.offset + i);
+      buildOverlay(card, n, selectedSet);
+    });
+  }
 }
 
 function syncProgressHUDSize() {
   const w = $('#partyHUD');
   const p = $('#progressHUD');
   if (!w || !p) return;
-  p.style.width = w.offsetWidth + 'px';
-  p.style.height = 'auto';
-  p.style.right = '16px';
-  p.style.bottom = (w.offsetHeight + 32) + 'px';
+  const barRect = w.getBoundingClientRect();
+  const dl = $('#dlBtn');
+  let left = 8;
+  if (dl) {
+    const dlRect = dl.getBoundingClientRect();
+    left = Math.max(8, Math.round(dlRect.left));
+  }
+  const gap = 10;
+  const barHeight = Math.max(0, Math.round(window.innerHeight - barRect.top));
+  p.style.left = left + 'px';
+  p.style.right = 'auto';
+  p.style.bottom = (barHeight + gap) + 'px';
 }
 
+function syncFilterBoxWidth(){
+  const bar = document.getElementById('partyHUD');
+  const post = document.getElementById('fPosts');
+  if (!bar || !post) return;
+  const b = bar.getBoundingClientRect();
+  const p = post.getBoundingClientRect();
+  const w = Math.max(0, Math.round(p.right - b.left));
+  bar.style.setProperty('--hud-row-width', w + 'px');
+}
 
+function syncFilterBoxVisibility(){
+  const box = document.getElementById('filterBox');
+  const status = document.getElementById('filterStatus');
+  if (!box || !status) return;
+  const hasText = !!(status.textContent && status.textContent.trim());
+  const { total, completed, downloading, queued } = getCounts();
+  const hasActivity = (total + completed + downloading + queued + lastDropNoteCount) > 0 || HUD_MODE === 'scrape';
+  box.style.display = hasText || hasActivity ? 'inline-flex' : 'none';
+}
+
+function syncProgressBarVisibility(){
+  const wrap = document.getElementById('pgWrap');
+  if (!wrap) return;
+  const { total, completed, downloading, queued } = getCounts();
+  const hasActivity = (total + completed + downloading + queued + lastDropNoteCount) > 0 || HUD_MODE === 'scrape';
+  wrap.style.display = hasActivity ? 'flex' : 'none';
+}
+
+function lockMediaButtonWidth(){
+  const btn = document.getElementById('btnMedia');
+  if (!btn) return;
+  const labels = ['All','Images','GIFs','Videos'];
+  const probe = btn.cloneNode(true);
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
+  probe.style.left = '-9999px';
+  probe.style.width = 'auto';
+  probe.style.whiteSpace = 'nowrap';
+  document.body.appendChild(probe);
+  let max = 0;
+  for (const t of labels){
+    probe.textContent = t;
+    max = Math.max(max, probe.offsetWidth);
+  }
+  document.body.removeChild(probe);
+  btn.style.width = max + 'px';
+}
 
 function buildHUD() {
   if ($('#partyHUD')) return;
@@ -192,11 +427,36 @@ function buildHUD() {
   const w = document.createElement('div');
   w.id = 'partyHUD';
   w.innerHTML = `
-    <button id="dlBtn" class="full">Download</button>
-    <div class="hud-row"><button id="btnMedia">Images</button><button id="scrapeBtn">Scrape</button><button id="filterBtn">Filter</button></div>
-    <div id="filterBox"><span id="filterStatus"></span></div>
-    <label>Page <input id="fPages" type="text" placeholder="1,3-5"></label>
-    <label>Post <input id="fPosts" type="text" placeholder="Global e.g. 1-5,120"></label>
+    <div id="filterBox">
+      <span id="filterStatus"></span>
+      <div id="pgRight" aria-live="polite">
+        <div id="pgMini">
+          <span>Completed: <span id="completedCount">0</span></span>
+          <span class="pgDot">•</span>
+          <span>Queued: <span id="queuedCount">0</span></span>
+        </div>
+        <div id="pgDrop" style="display:none">
+          <span class="pgDot">•</span>
+          <span>Dropped: <span id="droppedCount">0</span></span>
+        </div>
+      </div>
+    </div>
+    <div id="pgWrap" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Download progress">
+      <div id="pgTrack"><div id="pgFill"></div></div>
+      <div id="pgBarLabel" aria-hidden="true">0%</div>
+    </div>
+    <div id="hudRow" class="hud-row">
+      <button id="dlBtn" class="full">Download</button>
+      <button id="scrapeBtn" class="full">Scrape</button>
+      <button id="filterBtn" class="full">Preview</button>
+      <button id="btnMedia" class="full">All</button>
+      <input id="fPages" type="text" placeholder="Page">
+      <input id="fPosts" type="text" placeholder="Post">
+      <input id="fMaxDur" type="number" placeholder="Max duration" min="1" step="1">
+      <input id="fMinDur" type="number" placeholder="Min duration" min="1" step="1">
+      <input id="fMaxAtt" type="number" placeholder="Max attachments" min="1" step="1">
+      <input id="fMinAtt" type="number" placeholder="Min attachments" min="1" step="1">
+    </div>
   `;
   document.body.appendChild(w);
 
@@ -204,32 +464,36 @@ function buildHUD() {
   $('#filterBtn').onclick = handleFilterOnly;
   $('#scrapeBtn').onclick = handleScrape;
 
-  const p = document.createElement('div');
-  p.id = 'progressHUD';
-  p.style.display = 'none';
-  p.innerHTML = `
-    <h4 id="progressHeader">Progress: 0%</h4>
-    <div><strong>Total:</strong> <span id="totalCount">0</span></div>
-    <div><strong>Completed:</strong> <span id="completedCount">0</span></div>
-    <div><strong>Downloading:</strong> <span id="downloadingCount">0</span></div>
-    <div><strong>Queued:</strong> <span id="queuedCount">0</span></div>
-  `;
-  document.body.appendChild(p);
-
-  requestAnimationFrame(syncProgressHUDSize);
-
+  const mediaLabel = m => m === 'all' ? 'All' : m === 'images' ? 'Images' : m === 'gifs' ? 'GIFs' : m === 'videos' ? 'Videos' : 'All';
   const btnMedia = $('#btnMedia');
+  btnMedia.textContent = mediaLabel(MEDIA_MODE);
   btnMedia.onclick = () => {
-    MEDIA_MODE = MEDIA_MODE === 'images' ? 'videos' : MEDIA_MODE === 'videos' ? 'all' : 'images';
-    btnMedia.textContent = MEDIA_MODE === 'all' ? 'All' : MEDIA_MODE[0].toUpperCase() + MEDIA_MODE.slice(1);
+    MEDIA_MODE =
+      MEDIA_MODE === 'all' ? 'images' :
+      MEDIA_MODE === 'images' ? 'gifs' :
+      MEDIA_MODE === 'gifs' ? 'videos' :
+      'all';
+    btnMedia.textContent = mediaLabel(MEDIA_MODE);
   };
+
+  const hudRow = document.getElementById('hudRow');
+  if (hudRow && 'ResizeObserver' in window) {
+    new ResizeObserver(() => { syncFilterBoxWidth(); }).observe(hudRow);
+  }
+  requestAnimationFrame(syncFilterBoxWidth);
+  requestAnimationFrame(syncFilterBoxVisibility);
+  requestAnimationFrame(syncProgressBarVisibility);
+  requestAnimationFrame(lockMediaButtonWidth);
 }
 
 function allowedUrl(u) {
   const s = (u || '').split('?')[0];
   const isImg = imgRE.test(s), isVid = vidRE.test(s);
+  const isGif = s.toLowerCase().endsWith('.gif');
+  const isAbs = /^https?:\/\//i.test(s);
   if (MEDIA_MODE === 'all') return isImg || isVid;
   if (MEDIA_MODE === 'images') return isImg;
+  if (MEDIA_MODE === 'gifs') return isGif;
   if (MEDIA_MODE === 'videos') return isVid;
   return false;
 }
@@ -243,6 +507,25 @@ function resolveFileUrl(obj) {
   }
   if (obj.url && obj.url.startsWith('http')) return obj.url;
   return null;
+}
+
+const durCache = Object.create(null);
+
+function getVideoDuration(u) {
+  return durCache[u] ?? (durCache[u] = new Promise(res => {
+    const v = document.createElement('video');
+    v.preload = 'metadata';
+    v.crossOrigin = 'anonymous';
+    v.src = u;
+    const done = d => { try{v.remove();}catch{} try{v.src='';}catch{} res(d); };
+    v.onloadedmetadata = () => done(v.duration || Infinity);
+    v.onerror = () => done(Infinity);
+  }));
+}
+
+async function videoBelowDuration(u, maxSec) {
+  const d = await getVideoDuration(u);
+  return d <= maxSec;
 }
 
 
@@ -272,30 +555,21 @@ function updateHUD() {
 
   const { total, completed, downloading, queued } = getCounts();
   const percent = total ? Math.round((completed / total) * 100) : 0;
+  const pct = Math.max(0, Math.min(100, percent));
 
-  const h = $('#progressHeader');
-  if (h) h.textContent = `Progress: ${percent}%${lastDropNoteCount ? ` • Dropped ${lastDropNoteCount}` : ''}${HUD_MODE==='scrape' && HUD_EXTRA ? ` • ${HUD_EXTRA}` : ''}`;
+  const fill = $('#pgFill'); if (fill) fill.style.width = pct + '%';
+  const barLabel = $('#pgBarLabel'); if (barLabel) barLabel.textContent = pct + '%';
+  const pgWrap = $('#pgWrap'); if (pgWrap) pgWrap.setAttribute('aria-valuenow', String(pct));
 
-  const tC = $('#totalCount'); if (tC) tC.textContent = total;
   const cC = $('#completedCount'); if (cC) cC.textContent = completed;
-  const dC = $('#downloadingCount'); if (dC) dC.textContent = downloading;
   const qC = $('#queuedCount'); if (qC) qC.textContent = queued;
 
-  const ph = $('#progressHUD');
-  if (ph) {
-    if (total || completed || downloading || queued) {
-      ph.style.display = 'flex';
-      ph.style.opacity = '1';
-      syncProgressHUDSize();
-    } else if (HUD_MODE === 'scrape') {
-      ph.style.display = 'flex';
-      ph.style.opacity = '1';
-      syncProgressHUDSize();
-    } else {
-      ph.style.opacity = '0';
-      setTimeout(() => { const p = $('#progressHUD'); if (p) p.style.display = 'none'; }, 250);
-    }
-  }
+  const hasDropped = lastDropNoteCount > 0;
+  const dropEl = $('#pgDrop'); if (dropEl) dropEl.style.display = hasDropped ? 'flex' : 'none';
+  const xC = $('#droppedCount'); if (xC) xC.textContent = String(lastDropNoteCount);
+
+  syncFilterBoxVisibility();
+  syncProgressBarVisibility();
 }
 
 function scheduleHUD() {
@@ -453,17 +727,18 @@ function parsePages(str) {
 function parseIndices(str) {
   const set = new Set();
   if (!str.trim()) return null;
-  str.split(',').forEach(token => {
+  const tokens = str.split(',').map(s=>s.trim()).filter(Boolean);
+  for (const token of tokens){
     if (token.includes('-')) {
       const [a, b] = token.split('-').map(Number);
-      if (!a || !b || a <= 0 || b < a) return;
-      for (let i = a; i <= b; i++) set.add(i);
+      if (!a || !b || a <= 0 || b < a) continue;
+      for (let i=a;i<=b;i++) set.add(i);
     } else {
       const n = parseInt(token, 10);
-      if (!n || n <= 0) return;
+      if (!n || n <= 0) continue;
       set.add(n);
     }
-  });
+  }
   return set.size ? new Set([...set].sort((a, b) => a - b)) : new Set();
 }
 
@@ -473,17 +748,6 @@ const slug = s => (s || 'untitled').trim().replace(/[\s\\/:*?"<>|]+/g, '_').slic
 
 function formatFilename(post, fileObj, index, globalIndex) {
   const user = post.user || userName();
-  const iso = post.published || post.added || '';
-  let shortDate = '000000';
-  if (iso) {
-    const d = new Date(iso);
-    if (!isNaN(d)) {
-      const yy = String(d.getFullYear() % 100).padStart(2, '0');
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      shortDate = yy + mm + dd;
-    }
-  }
   const sanitizeSection = s => {
     s = (s || '').normalize('NFC');
     s = s.replace(/\s+/g, '_');
@@ -495,20 +759,77 @@ function formatFilename(post, fileObj, index, globalIndex) {
   const titleRaw = (post.title && post.title.trim()) ? post.title : ('post_' + post.id);
   const userSec = sanitizeSection(user);
   const titleSec = sanitizeSection(titleRaw).slice(0, 60);
-  const idSec = String(post.id);
   const idx = String(index).padStart(2, '0');
   const ext = (fileObj.name || fileObj.path || '').split('.').pop().split('?')[0].toLowerCase();
-  const globalStr = (typeof globalIndex === 'number' && globalIndex > 0) ? String(globalIndex).padStart(PG_GW || 1, '0') : null;
-  if (globalStr) {
-    return `${userSec} - ${shortDate} - ${globalStr} - ${titleSec} - ${idSec} - ${idx}.${ext}`;
-  } else {
-    return `${userSec} - ${shortDate} - ${titleSec} - ${idSec} - ${idx}.${ext}`;
-  }
+  const g = String(globalIndex || 0).padStart(PG_GW || 1, '0');
+  return `${userSec} - ${g} - ${titleSec}_${idx}.${ext}`;
+}
+
+function extractLinksFromPost(p) {
+  const html = p.content || p.body || p.description || p.text || p.message || p.commentary || p.plain || p.excerpt || p.snippet || p.substring || '';
+  if (typeof html !== 'string' || !html.trim()) return [];
+  let out = [];
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      if (/^https?:\/\//i.test(href)) out.push(href);
+    });
+  } catch {}
+  return out;
 }
 
 
 
 let keptPosts = [];
+
+async function enumerateAllPostIds(service, userId) {
+  const ids = [];
+  let pg = 1;
+  while (true) {
+    const o = (pg - 1) * POSTS_PER_PAGE;
+    const apiUrl = `/api/v1/${service}/user/${userId}/posts?o=${o}`;
+    const resp = await apiGetJson(apiUrl);
+    const arr = Array.isArray(resp) ? resp : (resp && (resp.results || resp.posts)) || [];
+    if (!Array.isArray(arr) || arr.length === 0) break;
+    for (const p of arr) ids.push(String(p.id));
+    if (arr.length < POSTS_PER_PAGE) break;
+    pg++;
+    await sleep(200 + Math.floor(Math.random()*200));
+  }
+  return ids;
+}
+
+async function ensureGlobalIndexMap() {
+  if (PG_INDEX_MAP) return PG_INDEX_MAP;
+  if (PG_INDEX_PROMISE) return PG_INDEX_PROMISE;
+  const parts = location.pathname.split('/');
+  const service = parts[1];
+  const userId = parts[3];
+  if (!service || !userId) return null;
+  PG_INDEX_PROMISE = (async () => {
+    const ids = await enumerateAllPostIds(service, userId);
+    if (!ids || !ids.length) {
+      PG_TOTAL = null;
+      PG_GW = 1;
+      PG_INDEX_MAP = null;
+      return null;
+    }
+    const total = ids.length;
+    PG_TOTAL = total;
+    PG_GW = String(total).length;
+    const map = new Map();
+    for (let i = 0; i < ids.length; i++) {
+      const n = total - i;
+      map.set(String(ids[i]), n);
+    }
+    PG_INDEX_MAP = map;
+    return map;
+  })();
+  const result = await PG_INDEX_PROMISE;
+  PG_INDEX_PROMISE = null;
+  return result;
+}
 
 async function handleFilter() {
   const st = $('#filterStatus');
@@ -516,17 +837,69 @@ async function handleFilter() {
 
   const pagesRaw = $('#fPages')?.value || '';
   const postsRaw = $('#fPosts')?.value || '';
+  const maxDurRaw = $('#fMaxDur')?.value || '';
+  const minDurRaw = $('#fMinDur')?.value || '';
+  const maxAttRaw = $('#fMaxAtt')?.value || '';
+  const minAttRaw = $('#fMinAtt')?.value || '';
   const globalPosts = parseIndices(postsRaw);
-  if (postsRaw.trim() && (!globalPosts || globalPosts.size === 0)) { if (st) st.textContent = 'Invalid posts'; return; }
+  if (postsRaw.trim() && (!globalPosts || globalPosts.size === 0)) { if (st) st.textContent = 'Invalid posts'; scheduleHUD(); return; }
   const filteringByPosts = globalPosts && globalPosts.size;
 
+  let maxDurSec = null, minDurSec = null;
+  if (maxDurRaw.trim()) {
+    const s = parseFloat(maxDurRaw);
+    if (isNaN(s) || s <= 0) { if (st) st.textContent = 'Invalid duration'; scheduleHUD(); return; }
+    maxDurSec = s;
+  }
+  if (minDurRaw.trim()) {
+    const s2 = parseFloat(minDurRaw);
+    if (isNaN(s2) || s2 <= 0) { if (st) st.textContent = 'Invalid duration'; scheduleHUD(); return; }
+    minDurSec = s2;
+  }
+  if (maxDurSec != null && minDurSec != null && minDurSec > maxDurSec) { if (st) st.textContent = 'Min exceeds Max'; scheduleHUD(); return; }
+
+  let maxAtt = null, minAtt = null;
+  if (maxAttRaw.trim()) {
+    const n = parseInt(maxAttRaw, 10);
+    if (isNaN(n) || n <= 0) { if (st) st.textContent = 'Invalid attachments'; scheduleHUD(); return; }
+    maxAtt = n;
+  }
+  if (minAttRaw.trim()) {
+    const n2 = parseInt(minAttRaw, 10);
+    if (isNaN(n2) || n2 <= 0) { if (st) st.textContent = 'Invalid attachments'; scheduleHUD(); return; }
+    minAtt = n2;
+  }
+  if (maxAtt != null && minAtt != null && minAtt > maxAtt) { if (st) st.textContent = 'Min exceeds Max'; scheduleHUD(); return; }
+
   const stats0 = getListStats();
-  if (stats0.total && stats0.total > 0) { PG_TOTAL = stats0.total; PG_GW = String(PG_TOTAL).length; } else { PG_TOTAL = null; PG_GW = 1; }
 
   keptPosts = [];
 
   const [, service, , userId] = location.pathname.split('/');
-  lastFilterParams = { postRaw: postsRaw, service, media: MEDIA_MODE };
+  let indexMap = null;
+  if (service && userId) {
+    indexMap = await ensureGlobalIndexMap();
+    if (indexMap && indexMap.size) {
+      PG_TOTAL = indexMap.size;
+      PG_GW = String(PG_TOTAL).length;
+    } else if (stats0.total && stats0.total > 0) {
+      PG_TOTAL = stats0.total;
+      PG_GW = String(PG_TOTAL).length;
+    } else {
+      PG_TOTAL = null;
+      PG_GW = 1;
+    }
+  } else {
+    if (stats0.total && stats0.total > 0) {
+      PG_TOTAL = stats0.total;
+      PG_GW = String(PG_TOTAL).length;
+    } else {
+      PG_TOTAL = null;
+      PG_GW = 1;
+    }
+  }
+
+  lastFilterParams = { postRaw: postsRaw, service, media: MEDIA_MODE, maxDurRaw, minDurRaw, maxAttRaw, minAttRaw };
 
   const allowed = new Set();
   let totalFiles = 0;
@@ -536,7 +909,7 @@ async function handleFilter() {
 
   if (filteringByPosts) {
     const total = PG_TOTAL;
-    if (!total || total <= 0) { if (st) st.textContent = 'Unable to resolve total posts'; return; }
+    if (!total || total <= 0) { if (st) st.textContent = 'Unable to resolve total posts'; scheduleHUD(); return; }
 
     perPageMap = new Map();
     let dropped = 0;
@@ -556,27 +929,30 @@ async function handleFilter() {
       pages = derivedPages;
     } else {
       const userPages = parsePages(pagesRaw);
-      if (!userPages) { if (st) st.textContent = 'Invalid pages'; return; }
+      if (!userPages) { if (st) st.textContent = 'Invalid pages'; scheduleHUD(); return; }
       const userSet = new Set(userPages);
       pages = derivedPages.filter(p => userSet.has(p));
-      if (!pages.length) { if (st) st.textContent = 'No matching pages for given posts'; return; }
+      if (!pages.length) { if (st) st.textContent = 'No matching pages for given posts'; scheduleHUD(); return; }
     }
   } else {
     if (!pagesRaw.trim()) {
       allPages = true;
     } else {
       pages = parsePages(pagesRaw);
-      if (!pages) { if (st) st.textContent = 'Invalid pages'; return; }
+      if (!pages) { if (st) st.textContent = 'Invalid pages'; scheduleHUD(); return; }
     }
   }
 
+  const allIdsPartial = [];
   const procPage = async pg => {
-    if (st) st.textContent = 'Fetching page ' + pg;
+    setStatus('Fetching page ' + pg, 'info');
     try {
       const url = `/api/v1/${service}/user/${userId}/posts?o=${(pg - 1) * POSTS_PER_PAGE}&_=${Date.now()}_${pg}`;
       const apiResp = await apiGetJson(url);
       const arr = Array.isArray(apiResp) ? apiResp : (apiResp && (apiResp.results || apiResp.posts)) || [];
       if (!Array.isArray(arr) || arr.length === 0) return false;
+
+      for (const p of arr) allIdsPartial.push(String(p.id));
 
       for (const [i, p] of arr.entries()) {
         if (filteringByPosts) {
@@ -584,22 +960,40 @@ async function handleFilter() {
           if (!need || !need.has(i + 1)) continue;
         }
 
-        const refs = [];
+        let refs = [];
         const add = o => { const u = resolveFileUrl(o); if (u) refs.push(u); };
         if (p.file) add(p.file);
         if (p.attachments) p.attachments.forEach(add);
 
-        const allowedFiles = [];
+        const seen = new Set();
+        const uniqRefs = [];
         for (const ref of refs) {
+          const key = (ref.split('?')[0] || '').toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          uniqRefs.push(ref);
+        }
+
+        const allowedFiles = [];
+        for (const ref of uniqRefs) {
           if (!allowedUrl(ref)) continue;
+          if (vidRE.test(ref) && (maxDurSec != null || minDurSec != null)) {
+            const d = await getVideoDuration(ref);
+            if (!isFinite(d)) continue;
+            if (minDurSec != null && d < minDurSec) continue;
+            if (maxDurSec != null && d > maxDurSec) continue;
+          }
           allowedFiles.push(ref);
         }
         if (!allowedFiles.length) continue;
 
-        const globalIndex = (PG_TOTAL && PG_TOTAL > 0) ? (PG_TOTAL - (((pg - 1) * POSTS_PER_PAGE) + i)) : null;
+        if (minAtt != null && allowedFiles.length < minAtt) continue;
+        if (maxAtt != null && allowedFiles.length > maxAtt) continue;
+
+        const gi = (PG_TOTAL && PG_TOTAL > 0) ? (PG_TOTAL - (((pg - 1) * POSTS_PER_PAGE) + i)) : null;
 
         allowed.add(String(p.id));
-        keptPosts.push({ post: p, allowedFiles, globalIndex });
+        keptPosts.push({ post: p, allowedFiles, globalIndex: gi });
         totalFiles += allowedFiles.length;
       }
 
@@ -616,6 +1010,32 @@ async function handleFilter() {
     for (const pg of pages) await procPage(pg);
   }
 
+  let needMap = keptPosts.some(kp => !kp.globalIndex);
+  if (allPages && !indexMap) {
+    if (allIdsPartial.length > 0) {
+      PG_TOTAL = allIdsPartial.length;
+      PG_GW = String(PG_TOTAL).length;
+      const map = new Map();
+      for (let i=0;i<allIdsPartial.length;i++) map.set(allIdsPartial[i], PG_TOTAL - i);
+      for (const kp of keptPosts) if (!kp.globalIndex) kp.globalIndex = map.get(String(kp.post.id)) || 0;
+      needMap = false;
+    }
+  }
+  if (needMap && indexMap) {
+    for (const kp of keptPosts) if (!kp.globalIndex) kp.globalIndex = indexMap.get(String(kp.post.id)) || 0;
+    needMap = false;
+  }
+  if (needMap && service && userId && !indexMap) {
+    const ids = await enumerateAllPostIds(service, userId);
+    if (ids && ids.length) {
+      PG_TOTAL = ids.length;
+      PG_GW = String(PG_TOTAL).length;
+      const map = new Map();
+      for (let i=0;i<ids.length;i++) map.set(ids[i], PG_TOTAL - i);
+      for (const kp of keptPosts) if (!kp.globalIndex) kp.globalIndex = map.get(String(kp.post.id)) || 0;
+    }
+  }
+
   $$('article.post-card').forEach(c => {
     const id = c.getAttribute('data-id');
     c.style.display = allowed.has(id) ? '' : 'none';
@@ -623,7 +1043,6 @@ async function handleFilter() {
 
   if (st) st.textContent = 'Showing ' + keptPosts.length + ' posts and ' + totalFiles + ' files';
   injectPostNumbers();
-  syncProgressHUDSize();
   scheduleHUD();
 }
 
@@ -750,10 +1169,52 @@ async function handleScrape() {
 
 
 
+async function handleQueue() {
+  await handleFilter();
+  await queueFiltered();
+  scheduleHUD();
+}
+
+async function handleClear() {
+  const b = $('#dlBtn');
+  dl.started = false;
+  DL_ACTIVE = false;
+  if (b) { b.classList.remove('stop'); b.textContent = 'Download'; }
+  cooldownTimers.forEach(id => clearTimeout(id));
+  cooldownTimers.clear();
+  for (const k in retryMap) delete retryMap[k];
+  lastDropNoteAt = 0;
+  lastDropNoteCount = 0;
+  dl.items.length = 0;
+  const cC = $('#completedCount'); if (cC) cC.textContent = '0';
+  const qC = $('#queuedCount'); if (qC) qC.textContent = '0';
+  const xC = $('#droppedCount'); if (xC) xC.textContent = '0';
+  const dropEl = $('#pgDrop'); if (dropEl) dropEl.style.display = 'none';
+  const fill = $('#pgFill'); if (fill) fill.style.width = '0%';
+  const barLabel = $('#pgBarLabel'); if (barLabel) barLabel.textContent = '0%';
+  injectPostNumbers();
+  scheduleHUD();
+}
+
 async function handleDlBtn() {
   const b = $('#dlBtn');
 
   if (!DL_ACTIVE) {
+    const c = getCounts();
+    if (c.total > 0 && c.completed === c.total && c.downloading === 0 && c.queued === 0) {
+      await handleClear();
+    }
+
+    if (dl.items.length > 0) {
+      DL_ACTIVE = true;
+      dl.started = true;
+      b.classList.add('stop');
+      b.textContent = 'Stop';
+      requestDispatch();
+      scheduleHUD();
+      return;
+    }
+
     dl.started = false;
     DL_ACTIVE = false;
     LAST_QUEUE_HAD_ITEMS = false;
@@ -765,14 +1226,13 @@ async function handleDlBtn() {
     dl.items.length = 0;
     lastDropNoteAt = 0;
     lastDropNoteCount = 0;
-    const ph = $('#progressHUD');
-    if (ph) { ph.style.opacity = '0'; ph.style.display = 'none'; }
     const st = $('#filterStatus'); if (st) st.textContent = '';
-    const tC = $('#totalCount'); if (tC) tC.textContent = '0';
+    const fill = $('#pgFill'); if (fill) fill.style.width = '0%';
+    const barLabel = $('#pgBarLabel'); if (barLabel) barLabel.textContent = '0%';
     const cC = $('#completedCount'); if (cC) cC.textContent = '0';
-    const dC = $('#downloadingCount'); if (dC) dC.textContent = '0';
     const qC = $('#queuedCount'); if (qC) qC.textContent = '0';
-    const h = $('#progressHeader'); if (h) h.textContent = 'Progress: 0%';
+    const dropEl = $('#pgDrop'); if (dropEl) dropEl.style.display = 'none';
+    const xC = $('#droppedCount'); if (xC) xC.textContent = '0';
     await handleFilter();
     await queueFiltered();
 
@@ -1018,4 +1478,4 @@ const optimizerObserver = new MutationObserver(muts => {
 optimizerObserver.observe(document.body, { childList: true, subtree: true });
 
 pgOptimizeRoot(document.body);
-window.addEventListener('resize', syncProgressHUDSize);
+window.addEventListener('resize', syncFilterBoxWidth);
