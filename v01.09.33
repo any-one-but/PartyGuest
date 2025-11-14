@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         _PartyGuest
-// @version      01.09.32
+// @version      01.09.33
 // @description  A tool for downloading images and videos from Coomer/Kemono
 // @author       normal person
 // @match        *://coomer.st/*
@@ -121,7 +121,76 @@ button:disabled{opacity:.6;cursor:not-allowed}
 const SPAWN_DELAY = 800;
 const imgRE = /\.(jpe?g|png|gif|webp|tiff|bmp|avif)$/i;
 const vidRE = /\.(mp4|m4v|mov|wmv|flv|avi|webm|mkv)$/i;
-const POSTS_PER_PAGE = 50;
+const DEFAULT_POSTS_PER_PAGE = 50;
+let PG_POSTS_PER_PAGE = null;
+let PG_POSTS_PER_PAGE_KNOWN = false;
+let PG_POSTS_PER_PAGE_PROMISE = null;
+
+function updatePostsPerPage(n, { force = false } = {}) {
+  if (!n || n <= 0) return;
+  if (force) {
+    PG_POSTS_PER_PAGE = n;
+    PG_POSTS_PER_PAGE_KNOWN = true;
+    return;
+  }
+  if (!PG_POSTS_PER_PAGE_KNOWN) {
+    PG_POSTS_PER_PAGE = n;
+  } else if (n > PG_POSTS_PER_PAGE) {
+    PG_POSTS_PER_PAGE = n;
+  }
+}
+
+async function ensurePostsPerPage() {
+  if (PG_POSTS_PER_PAGE_KNOWN && PG_POSTS_PER_PAGE && PG_POSTS_PER_PAGE > 0) return PG_POSTS_PER_PAGE;
+
+  const stats = getListStats();
+  if (stats.pageSize && stats.pageSize > 0) {
+    updatePostsPerPage(stats.pageSize, { force: stats.pageReliable });
+    if (PG_POSTS_PER_PAGE_KNOWN && PG_POSTS_PER_PAGE && PG_POSTS_PER_PAGE > 0) return PG_POSTS_PER_PAGE;
+  }
+
+  if (PG_POSTS_PER_PAGE_PROMISE) return PG_POSTS_PER_PAGE_PROMISE;
+
+  const [, service, , userId] = location.pathname.split('/');
+  if (!service || !userId) {
+    PG_POSTS_PER_PAGE = PG_POSTS_PER_PAGE && PG_POSTS_PER_PAGE > 0 ? PG_POSTS_PER_PAGE : DEFAULT_POSTS_PER_PAGE;
+    return PG_POSTS_PER_PAGE;
+  }
+
+  PG_POSTS_PER_PAGE_PROMISE = (async () => {
+    const url = `/api/v1/${service}/user/${userId}/posts?o=0&_=${Date.now()}_pp`;
+    const resp = await apiGetJson(url);
+    const arr = Array.isArray(resp) ? resp : (resp && (resp.results || resp.posts)) || [];
+    if (Array.isArray(arr) && arr.length) {
+      updatePostsPerPage(arr.length, { force: true });
+    }
+    if (!PG_POSTS_PER_PAGE || PG_POSTS_PER_PAGE <= 0) {
+      PG_POSTS_PER_PAGE = DEFAULT_POSTS_PER_PAGE;
+      PG_POSTS_PER_PAGE_KNOWN = false;
+    }
+    PG_POSTS_PER_PAGE_PROMISE = null;
+    return PG_POSTS_PER_PAGE;
+  })();
+
+  return PG_POSTS_PER_PAGE_PROMISE;
+}
+
+function resolvePagePosition(offset, postsPerPage) {
+  let baseOffset = 0;
+  if (Array.isArray(PG_PAGE_OFFSETS) && PG_PAGE_OFFSETS.length) {
+    for (let i = PG_PAGE_OFFSETS.length - 1; i >= 0; i--) {
+      const val = PG_PAGE_OFFSETS[i];
+      if (typeof val === 'number' && offset >= val) {
+        baseOffset = val;
+        return { page: i + 1, local: (offset - val) + 1, baseOffset };
+      }
+    }
+  }
+  const size = postsPerPage && postsPerPage > 0 ? postsPerPage : DEFAULT_POSTS_PER_PAGE;
+  const page = Math.floor(offset / size) + 1;
+  baseOffset = (page - 1) * size;
+  return { page, local: (offset % size) + 1, baseOffset };
+}
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const dataRoot = 'https://' + location.host + '/data';
@@ -143,6 +212,7 @@ let PG_TOTAL = null;
 let PG_GW = 1;
 let PG_INDEX_MAP = null;
 let PG_INDEX_PROMISE = null;
+let PG_PAGE_OFFSETS = [];
 
 function apiGetJson(url) {
   return new Promise(resolve => {
@@ -202,6 +272,8 @@ function debounce(fn, delay) {
 function getListStats() {
   let total = null;
   let offset = 0;
+  let pageSize = null;
+  let pageReliable = false;
   const params = new URLSearchParams(location.search);
   const o = parseInt(params.get('o') || '0', 10);
   if (!isNaN(o) && o >= 0) offset = o;
@@ -211,15 +283,22 @@ function getListStats() {
     const m = t.match(/Showing\s+(\d+)\s*-\s*(\d+)\s*of\s*(\d+)/i);
     if (m) {
       const start = parseInt(m[1], 10);
+      const end = parseInt(m[2], 10);
       const tot = parseInt(m[3], 10);
-      if (!isNaN(start) && !isNaN(tot)) {
+      if (!isNaN(start) && !isNaN(end) && !isNaN(tot)) {
         total = tot;
         offset = start - 1;
+        const span = end - start + 1;
+        if (span > 0) {
+          pageSize = span;
+          if (start === 1 || (tot && (start - 1 + span) < tot)) pageReliable = true;
+          updatePostsPerPage(span, { force: pageReliable });
+        }
         break;
       }
     }
   }
-  return { total, offset };
+  return { total, offset, pageSize, pageReliable };
 }
 
 function updatePostSelectorFromCheckbox(num, isChecked) {
@@ -785,16 +864,19 @@ let keptPosts = [];
 
 async function enumerateAllPostIds(service, userId) {
   const ids = [];
-  let pg = 1;
+  let offset = 0;
+  let pageIndex = 0;
   while (true) {
-    const o = (pg - 1) * POSTS_PER_PAGE;
-    const apiUrl = `/api/v1/${service}/user/${userId}/posts?o=${o}`;
+    const apiUrl = `/api/v1/${service}/user/${userId}/posts?o=${offset}`;
     const resp = await apiGetJson(apiUrl);
     const arr = Array.isArray(resp) ? resp : (resp && (resp.results || resp.posts)) || [];
     if (!Array.isArray(arr) || arr.length === 0) break;
+    if (PG_PAGE_OFFSETS.length === pageIndex) PG_PAGE_OFFSETS.push(offset);
+    else PG_PAGE_OFFSETS[pageIndex] = offset;
+    updatePostsPerPage(arr.length, { force: !PG_POSTS_PER_PAGE_KNOWN });
     for (const p of arr) ids.push(String(p.id));
-    if (arr.length < POSTS_PER_PAGE) break;
-    pg++;
+    offset += arr.length;
+    pageIndex++;
     await sleep(200 + Math.floor(Math.random()*200));
   }
   return ids;
@@ -808,6 +890,7 @@ async function ensureGlobalIndexMap() {
   const userId = parts[3];
   if (!service || !userId) return null;
   PG_INDEX_PROMISE = (async () => {
+    PG_PAGE_OFFSETS = [];
     const ids = await enumerateAllPostIds(service, userId);
     if (!ids || !ids.length) {
       PG_TOTAL = null;
@@ -872,6 +955,7 @@ async function handleFilter() {
   if (maxAtt != null && minAtt != null && minAtt > maxAtt) { if (st) st.textContent = 'Min exceeds Max'; scheduleHUD(); return; }
 
   const stats0 = getListStats();
+  let postsPerPage = Math.max(await ensurePostsPerPage(), 1);
 
   keptPosts = [];
 
@@ -916,8 +1000,9 @@ async function handleFilter() {
     [...globalPosts].forEach(n => {
       if (n < 1 || n > total) { dropped++; return; }
       const offset = total - n;
-      const page = Math.floor(offset / POSTS_PER_PAGE) + 1;
-      const local = (offset % POSTS_PER_PAGE) + 1;
+      const pos = resolvePagePosition(offset, postsPerPage);
+      const page = pos.page;
+      const local = pos.local;
       if (!perPageMap.has(page)) perPageMap.set(page, new Set());
       perPageMap.get(page).add(local);
     });
@@ -947,10 +1032,19 @@ async function handleFilter() {
   const procPage = async pg => {
     setStatus('Fetching page ' + pg, 'info');
     try {
-      const url = `/api/v1/${service}/user/${userId}/posts?o=${(pg - 1) * POSTS_PER_PAGE}&_=${Date.now()}_${pg}`;
+      const storedOffset = PG_PAGE_OFFSETS[pg - 1];
+      const pageOffset = typeof storedOffset === 'number' ? storedOffset : (pg - 1) * postsPerPage;
+      const url = `/api/v1/${service}/user/${userId}/posts?o=${pageOffset}&_=${Date.now()}_${pg}`;
       const apiResp = await apiGetJson(url);
       const arr = Array.isArray(apiResp) ? apiResp : (apiResp && (apiResp.results || apiResp.posts)) || [];
       if (!Array.isArray(arr) || arr.length === 0) return false;
+
+      updatePostsPerPage(arr.length, { force: !PG_POSTS_PER_PAGE_KNOWN });
+      if (PG_POSTS_PER_PAGE_KNOWN && PG_POSTS_PER_PAGE && PG_POSTS_PER_PAGE > 0) {
+        postsPerPage = PG_POSTS_PER_PAGE;
+      } else if (arr.length > 0 && arr.length !== postsPerPage) {
+        postsPerPage = arr.length;
+      }
 
       for (const p of arr) allIdsPartial.push(String(p.id));
 
@@ -990,14 +1084,15 @@ async function handleFilter() {
         if (minAtt != null && allowedFiles.length < minAtt) continue;
         if (maxAtt != null && allowedFiles.length > maxAtt) continue;
 
-        const gi = (PG_TOTAL && PG_TOTAL > 0) ? (PG_TOTAL - (((pg - 1) * POSTS_PER_PAGE) + i)) : null;
+        const gi = (PG_TOTAL && PG_TOTAL > 0) ? (PG_TOTAL - (pageOffset + i)) : null;
 
         allowed.add(String(p.id));
         keptPosts.push({ post: p, allowedFiles, globalIndex: gi });
         totalFiles += allowedFiles.length;
       }
 
-      return arr.length === POSTS_PER_PAGE;
+      if (typeof PG_PAGE_OFFSETS[pg] === 'number') return true;
+      return arr.length === postsPerPage;
     } catch {
       return false;
     }
@@ -1089,18 +1184,31 @@ async function handleScrape() {
 
   const all = [];
   let pg = 1;
+  let postsPerPage = Math.max(await ensurePostsPerPage(), 1);
+  let offset = 0;
 
   while (true) {
-    const o = (pg - 1) * POSTS_PER_PAGE;
     setStatus(`Fetching page ${pg}...`,'info');
 
-    const apiUrl = `/api/v1/${service}/user/${userId}/posts?o=${o}`;
+    const apiUrl = `/api/v1/${service}/user/${userId}/posts?o=${offset}`;
     const resp = await apiGetJson(apiUrl);
     const arr = Array.isArray(resp) ? resp : (resp && (resp.results || resp.posts)) || [];
 
     if (!Array.isArray(arr) || arr.length === 0) break;
+    updatePostsPerPage(arr.length, { force: !PG_POSTS_PER_PAGE_KNOWN });
+    if (PG_POSTS_PER_PAGE_KNOWN && PG_POSTS_PER_PAGE && PG_POSTS_PER_PAGE > 0) {
+      postsPerPage = PG_POSTS_PER_PAGE;
+    } else if (arr.length > 0 && arr.length !== postsPerPage) {
+      postsPerPage = arr.length;
+    }
     all.push(...arr);
-    if (arr.length < POSTS_PER_PAGE) break;
+    offset += arr.length;
+
+    if (typeof PG_PAGE_OFFSETS[pg] === 'number') {
+      offset = PG_PAGE_OFFSETS[pg];
+    }
+
+    if ((typeof PG_PAGE_OFFSETS[pg] !== 'number') && arr.length < postsPerPage) break;
 
     pg++;
     await sleep(300 + Math.floor(Math.random()*400));
