@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         PartyGuest
-// @version      01.11.19
+// @version      01.11.21
 // @description  A tool for downloading images and videos from Coomer/Kemono
 // @author       normal person
 // @match        *://coomer.st/*
@@ -1654,7 +1654,7 @@ function formatFilename(post, fileObj, index, globalIndex) {
       }
     }
   } catch {}
-  const fileName = `${userSec} - ${dateSec} - ${gPost} - ${titleSec}_${fIdx}.${ext}`;
+  const fileName = `${dateSec} - ${gPost} - ${titleSec}_${fIdx}.${ext}`;
   const dot = fileName.lastIndexOf('.');
   const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
   const postFolder = stem.replace(/_\d+$/,'');
