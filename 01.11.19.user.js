@@ -189,12 +189,6 @@ GM_addStyle(`
   border-color: var(--rain-red);
 }
 
-#dlZipBtn.busy {
-  background: var(--rain-blue);
-  color: #ffffff;
-  border-color: var(--rain-blue);
-}
-
 #filterBtn {
   min-width: 90px;
 }
@@ -727,81 +721,6 @@ function apiGetJson(url) {
 
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
-let JSZIP_LOAD_PROMISE = null;
-
-function loadJsZip() {
-  if (window.JSZip) return Promise.resolve(window.JSZip);
-  if (JSZIP_LOAD_PROMISE) return JSZIP_LOAD_PROMISE;
-  JSZIP_LOAD_PROMISE = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-    script.async = true;
-    script.onload = () => resolve(window.JSZip);
-    script.onerror = () => {
-      JSZIP_LOAD_PROMISE = null;
-      reject(new Error('Failed to load JSZip'));
-    };
-    document.head.appendChild(script);
-  });
-  return JSZIP_LOAD_PROMISE;
-}
-
-function fetchBlob(url) {
-  return new Promise((resolve, reject) => {
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url,
-      responseType: 'blob',
-      onload: resp => {
-        if (resp.status >= 200 && resp.status < 300) resolve(resp.response);
-        else reject(new Error('Request failed with status ' + resp.status));
-      },
-      onerror: () => reject(new Error('Request failed')),
-    });
-  });
-}
-
-function sanitizeZipNamePart(s) {
-  s = (s || '').toString().normalize('NFC').trim();
-  s = s.replace(/\s+/g, '_');
-  s = s.replace(/[\\/:*?"<>|]+/g, '');
-  s = s.replace(/[\x00-\x1F\x7F]/g, '');
-  s = s.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
-  return s;
-}
-
-function buildZipFilename() {
-  const now = new Date();
-  const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const parts = [sanitizeZipNamePart(userName() || 'profile'), date];
-  const media = MEDIA_MODE === 'all' ? 'all' : MEDIA_MODE === 'images' ? 'images' : MEDIA_MODE === 'gifs' ? 'gifs' : 'videos';
-  parts.push(`media-${media}`);
-  const params = lastFilterParams || {};
-  const addFilter = (label, value) => {
-    const clean = sanitizeZipNamePart(value);
-    if (clean) parts.push(`${label}-${clean}`);
-  };
-  addFilter('pages', params.pagesRaw);
-  addFilter('posts', params.postRaw);
-  addFilter('files', params.filesRaw);
-  addFilter('duration', params.durRaw);
-  const raw = parts.filter(Boolean).join('_');
-  const sanitized = sanitizeZipNamePart(raw) || 'download';
-  const truncated = sanitized.length > 180 ? sanitized.slice(0, 180) : sanitized;
-  return `${truncated}.zip`;
-}
-
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function setStatus(text, type) {
   const el = $('#filterStatus');
   if (!el) return;
@@ -1282,7 +1201,6 @@ function buildHUD() {
     </div>
     <div id="hudRow" class="hud-row">
       <button id="dlBtn" class="full">Download</button>
-      <button id="dlZipBtn" class="full">Download Zip</button>
       <button id="galleryBtn" class="full">Gallery</button>
       <button id="localGalleryBtn" class="full">Local Gallery</button>
       <button id="filterBtn" class="full">Preview</button>
@@ -1297,7 +1215,6 @@ function buildHUD() {
   document.body.appendChild(w);
 
   $('#dlBtn').onclick = handleDlBtn;
-  $('#dlZipBtn').onclick = handleZipDownload;
 
   const galleryBtn = $('#galleryBtn');
   if (galleryBtn) galleryBtn.onclick = handleGalleryToggle;
@@ -2317,67 +2234,6 @@ async function handleClear() {
   injectPostNumbers();
   syncPageAllButtonState();
   scheduleHUD();
-}
-
-async function handleZipDownload() {
-  const btn = $('#dlZipBtn');
-  if (!btn || btn.classList.contains('busy')) return;
-  const originalText = btn.textContent;
-  btn.classList.add('busy');
-  btn.disabled = true;
-  btn.textContent = 'Zipping...';
-  setStatus('Preparing zip download...', 'info');
-
-  try {
-    await handleFilter();
-    if (!keptPosts.length) {
-      setStatus('No files matched your filters.', 'error');
-      return;
-    }
-
-    const Zip = await loadJsZip();
-    const zip = new Zip();
-    const items = [];
-    keptPosts.forEach(kp => {
-      const { post, allowedFiles, globalIndex } = kp;
-      allowedFiles.forEach(fileInfo => {
-        if (!fileInfo || !fileInfo.url) return;
-        const ref = fileInfo.url;
-        const name = formatFilename(post, { path: ref }, fileInfo.g, globalIndex);
-        items.push({ url: ref, name });
-      });
-    });
-
-    if (!items.length) {
-      setStatus('No files matched your filters.', 'error');
-      return;
-    }
-
-    let idx = 0;
-    for (const item of items) {
-      idx++;
-      setStatus(`Downloading ${idx}/${items.length}...`, 'info');
-      const blob = await fetchBlob(item.url);
-      zip.file(item.name, blob);
-    }
-
-    setStatus('Compressing zip...', 'info');
-    const zipBlob = await zip.generateAsync({ type: 'blob' }, meta => {
-      if (meta && typeof meta.percent === 'number') {
-        setStatus(`Compressing ${Math.round(meta.percent)}%...`, 'info');
-      }
-    });
-    const fileName = buildZipFilename();
-    downloadBlob(zipBlob, fileName);
-    setStatus(`Zip ready (${items.length} files).`, 'success');
-  } catch (err) {
-    console.error(err);
-    setStatus('Zip download failed.', 'error');
-  } finally {
-    btn.classList.remove('busy');
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
 }
 
 async function handleDlBtn() {
